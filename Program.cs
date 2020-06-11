@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using LiteDB;
 
@@ -24,22 +25,41 @@ namespace litedb_bug_repro
 
     class Program
     {
-        static void Main(string[] args)
+        const string Database = "Database.db";
+        const string DatabaseCopy1 = "DatabaseCopy1.db";
+        const string DatabaseCopy2 = "DatabaseCopy2.db";
+        const string CollectionName = "DataObjects";
+        const string MagicId = "1lZ5vhb.15Db3Y";
+
+        static void Main(string[] _)
         {
-            const string dbFileName = "TypeDataDbRootNode.db";
-            const string collectionName = "DataObjects";
-            const string magicId = "1lZ5vhb.15Db3Y";
+            File.Copy(Database, DatabaseCopy1, true);
+            File.Copy(Database, DatabaseCopy2, true);
 
-            using var db = new LiteDatabase(dbFileName);
-            var collection = db.GetCollection<MongoDbDataWrapper<string>>(collectionName);
-            var allDocuments = collection.FindAll().ToArray();
-            var document = collection.FindById(magicId);
+            using var db1 = new LiteDatabase(DatabaseCopy1);
+            using var db2 = new LiteDatabase(DatabaseCopy2);
 
-            Console.WriteLine(
-                $"Found {allDocuments.FirstOrDefault(d => d.Id == magicId)?.Id ?? "null"} " +
-                "using FindAll");
+            Console.WriteLine("Finding without rebuild");
+            FindMagicId(db1);
 
-            Console.WriteLine($"Found {document?.d ?? "null"} using FindById");
+            Console.WriteLine("Finding with rebuild");
+            db2.Rebuild();
+            FindMagicId(db2);
+
+            File.Delete(DatabaseCopy1);
+            File.Delete(DatabaseCopy2);
+        }
+
+        static void FindMagicId(LiteDatabase db)
+        {
+            var collection = db.GetCollection<MongoDbDataWrapper<string>>(CollectionName);
+            var allDocuments = collection.FindAll();
+
+            var foundByFindById = collection.FindById(MagicId);
+            var foundByLinq = allDocuments.FirstOrDefault(d => d.Id == MagicId);
+
+            Console.WriteLine($"Found {foundByLinq?.d ?? "null"} using FindAll + Linq");
+            Console.WriteLine($"Found {foundByFindById?.d ?? "null"} using FindById");
         }
     }
 }
